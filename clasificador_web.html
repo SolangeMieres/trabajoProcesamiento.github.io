@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clasificador CIFAR-10 — TP Grupal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f4f4;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+    header h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    header p  { font-size: 13px; color: #aaa; line-height: 1.5; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 10px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 14px;
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #ccc;
+    }
+    .dot.green  { background: #1D9E75; }
+    .dot.amber  { background: #EF9F27; animation: pulse 1s infinite; }
+    .dot.red    { background: #E24B4A; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    label.field-label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+      margin-top: 12px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: monospace;
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      background: #fafafa;
+      color: #1a1a1a;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus { border-color: #378ADD; }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-family: inherit;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      background: #fff;
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
+      color: #1a1a1a;
+    }
+    button:hover { background: #f0f0f0; border-color: #aaa; }
+    button:active { transform: scale(.98); }
+    button.primary {
+      background: #1a1a2e;
+      color: #fff;
+      border-color: #1a1a2e;
+    }
+    button.primary:hover { background: #2a2a4e; }
+
+    .btn-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+    .divider { border: none; border-top: 1px solid #eee; margin: 14px 0; }
+
+    input[type="file"] {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.6;
+      background: #fffbea;
+      border: 1px solid #f0d080;
+      border-radius: 7px;
+      padding: 8px 10px;
+      margin-top: 8px;
+    }
+
+    #drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      background: #fafafa;
+      transition: border-color .15s, background .15s;
+    }
+    #drop-zone:hover  { border-color: #378ADD; background: #eef5fc; }
+    #drop-zone.drag-over { border-color: #378ADD; background: #ddeeff; }
+    #drop-zone.disabled { opacity: .4; pointer-events: none; cursor: default; }
+    #drop-zone svg { display: block; margin: 0 auto 10px; }
+    #drop-zone p.dz-title { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+    #drop-zone p.dz-sub   { font-size: 12px; color: #888; }
+
+    #preview-section { display: none; }
+    .preview-inner { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
+
+    #preview-img {
+      width: 140px; height: 140px;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      background: #f4f4f4;
+      display: block;
+    }
+
+    .results-col { flex: 1; min-width: 200px; }
+    #result-name { font-size: 26px; font-weight: 700; margin-bottom: 2px; color: #1a1a2e; }
+    #result-conf { font-size: 13px; color: #888; margin-bottom: 14px; }
+
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .bar-lbl  { width: 82px; font-size: 12px; color: #666; text-align: right; flex-shrink: 0; }
+    .bar-track {
+      flex: 1; height: 10px;
+      background: #f0f0f0;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid #e0e0e0;
+    }
+    .bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; background: #378ADD; }
+    .bar-fill.top { background: #1D9E75; }
+    .bar-pct { font-size: 12px; width: 40px; color: #888; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .chip {
+      font-size: 11px; padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      color: #666;
+      background: #f8f8f8;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 2rem;
+      padding-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>Clasificador de Imágenes — CIFAR-10</h1>
+    <p>
+      TP Grupal &nbsp;·&nbsp; Procesamiento de Aprendizaje Automático &nbsp;·&nbsp; TensorFlow.js<br>
+      Integrantes: <em>(completar)</em> &nbsp;·&nbsp; Carrera: <em>(completar)</em> &nbsp;·&nbsp; IFTS Nro: <em>(completar)</em>
+    </p>
+  </header>
+
+  <!-- Paso 1: cargar modelo -->
+  <div class="card">
+    <p class="card-title">Paso 1 — Cargar modelo entrenado</p>
+
+    <div class="status-row">
+      <span class="dot amber" id="dot"></span>
+      <span id="model-msg">Sin modelo cargado — TensorFlow.js listo</span>
+    </div>
+
+    <p style="font-size:13px;color:#555;line-height:1.6;margin-bottom:10px">
+      El modelo fue entrenado en Python (Colab) y exportado a formato TensorFlow.js.
+      Cargalo de una de las dos formas siguientes:
+    </p>
+
+    <label class="field-label">Opción A — URL del <code>model.json</code> (GitHub Pages, ngrok, etc.)</label>
+    <input type="text" id="model-url" placeholder="https://tuusuario.github.io/cifar10/model.json" />
+    <div class="btn-row">
+      <button class="primary" onclick="loadFromURL()">⬇ Cargar desde URL</button>
+    </div>
+
+    <hr class="divider">
+
+    <label class="field-label">Opción B — Archivos locales del zip descargado de Colab</label>
+    <input type="file" id="file-model" multiple accept=".json,.bin" onchange="loadFromFiles(this.files)">
+    <div class="note">
+      ⚠ Seleccioná <strong>todos los archivos juntos</strong>: <code>model.json</code> + todos los <code>.bin</code> del zip descargado de Colab.
+    </div>
+  </div>
+
+  <!-- Paso 2: subir imagen -->
+  <div class="card">
+    <p class="card-title">Paso 2 — Subir imagen para clasificar</p>
+    <div id="drop-zone" class="disabled"
+         onclick="document.getElementById('img-input').click()"
+         ondragover="onDragOver(event)"
+         ondragleave="onDragLeave(event)"
+         ondrop="onDrop(event)">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <p class="dz-title">Subir imagen</p>
+      <p class="dz-sub">Hacé clic o arrastrá — JPG, PNG, GIF</p>
+    </div>
+    <input type="file" id="img-input" accept="image/*" style="display:none" onchange="handleImage(this.files[0])">
+  </div>
+
+  <!-- Resultado -->
+  <div class="card" id="preview-section">
+    <p class="card-title">Resultado de la predicción</p>
+    <div class="preview-inner">
+      <div>
+        <img id="preview-img" src="" alt="Imagen clasificada">
+        <div style="margin-top:8px">
+          <button onclick="document.getElementById('img-input').click()">↺ Cambiar imagen</button>
+        </div>
+      </div>
+      <div class="results-col">
+        <p id="result-name">—</p>
+        <p id="result-conf"></p>
+        <div id="bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info clases -->
+  <div class="card">
+    <p class="card-title">Clases disponibles (10 categorías CIFAR-10)</p>
+    <div class="chips">
+      <span class="chip">✈ airplane</span>
+      <span class="chip">🚗 automobile</span>
+      <span class="chip">🐦 bird</span>
+      <span class="chip">🐱 cat</span>
+      <span class="chip">🦌 deer</span>
+      <span class="chip">🐶 dog</span>
+      <span class="chip">🐸 frog</span>
+      <span class="chip">🐴 horse</span>
+      <span class="chip">🚢 ship</span>
+      <span class="chip">🚛 truck</span>
+    </div>
+    <p style="font-size:12px;color:#888;margin-top:10px;line-height:1.6">
+      Las imágenes se redimensionan internamente a <strong>32×32 px</strong> antes de predecir,
+      igual que en el entrenamiento. Para mejores resultados: objeto centrado, fondo simple.
+    </p>
+  </div>
+
+  <footer>
+    Clasificador CIFAR-10 · TensorFlow.js · TP Grupal de Aprendizaje Automático
+  </footer>
+
+</div>
+
+<script>
+  const CLASSES = ['airplane','automobile','bird','cat','deer','dog','frog','horse','ship','truck'];
+  let model = null;
+
+  function setStatus(msg, state) {
+    document.getElementById('model-msg').textContent = msg;
+    const dot = document.getElementById('dot');
+    dot.className = 'dot ' + (state === 'ok' ? 'green' : state === 'error' ? 'red' : 'amber');
+  }
+
+  function enableDrop(on) {
+    const dz = document.getElementById('drop-zone');
+    on ? dz.classList.remove('disabled') : dz.classList.add('disabled');
+  }
+
+  async function loadFromURL() {
+    const url = document.getElementById('model-url').value.trim();
+    if (!url) { setStatus('Ingresá una URL válida', 'error'); return; }
+    setStatus('Cargando modelo desde URL...', 'loading');
+    try {
+      model = await tf.loadLayersModel(url);
+      setStatus('Modelo cargado correctamente ✓ — podés subir una imagen', 'ok');
+      enableDrop(true);
+    } catch(e) {
+      setStatus('Error al cargar: ' + e.message, 'error');
+    }
+  }
+
+  async function loadFromFiles(files) {
+    if (!files || files.length === 0) return;
+    setStatus('Cargando archivos locales...', 'loading');
+    try {
+      model = await tf.loadLayersModel(tf.io.browserFiles(Array.from(files)));
+      setStatus('Modelo cargado desde archivos locales ✓ — podés subir una imagen', 'ok');
+      enableDrop(true);
+    } catch(e) {
+      setStatus('Error: ' + e.message + ' — ¿Seleccionaste todos los archivos .bin?', 'error');
+    }
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.add('drag-over');
+  }
+  function onDragLeave() {
+    document.getElementById('drop-zone').classList.remove('drag-over');
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleImage(e.dataTransfer.files[0]);
+  }
+
+  function handleImage(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = document.getElementById('preview-img');
+      img.src = ev.target.result;
+      img.onload = () => {
+        document.getElementById('preview-section').style.display = 'block';
+        predict(img);
+      };
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function predict(imgEl) {
+    if (!model) return;
+    document.getElementById('result-name').textContent = 'Procesando...';
+    document.getElementById('result-conf').textContent = '';
+    document.getElementById('bars').innerHTML = '';
+
+    try {
+      const tensor = tf.tidy(() =>
+        tf.browser.fromPixels(imgEl)
+          .resizeBilinear([32, 32])
+          .toFloat()
+          .div(255.0)
+          .expandDims(0)
+      );
+
+      const raw   = model.predict(tensor);
+      const preds = await raw.data();
+      tensor.dispose();
+      raw.dispose();
+
+      const probs  = Array.from(preds);
+      const topIdx = probs.indexOf(Math.max(...probs));
+      const topPct = (probs[topIdx] * 100).toFixed(1);
+
+      document.getElementById('result-name').textContent = CLASSES[topIdx];
+      document.getElementById('result-conf').textContent = 'Confianza: ' + topPct + '%';
+
+      const sorted = probs
+        .map((p, i) => ({ label: CLASSES[i], p }))
+        .sort((a, b) => b.p - a.p);
+
+      const barsDiv = document.getElementById('bars');
+      sorted.forEach((item, i) => {
+        const pct = (item.p * 100).toFixed(1);
+        barsDiv.innerHTML += `
+          <div class="bar-row">
+            <span class="bar-lbl">${item.label}</span>
+            <div class="bar-track">
+              <div class="bar-fill${i === 0 ? ' top' : ''}" style="width:${pct}%"></div>
+            </div>
+            <span class="bar-pct">${pct}%</span>
+          </div>`;
+      });
+
+    } catch(e) {
+      document.getElementById('result-name').textContent = 'Error: ' + e.message;
+    }
+  }
+
+  tf.ready().then(() => setStatus('TensorFlow.js listo — cargá tu modelo', 'amber'));
+</script>
+
+</body>
+</html>
